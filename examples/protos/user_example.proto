@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package examples.actors;
+
+option go_package = "github.com/eigr/spawn-go-sdk/examples/actors;actors";
+
+
+message UserState {
+  string name = 1;
+}
+
+message ChangeUserNamePayload {
+  string new_name = 1;
+}
+
+message ChangeUserNameResponse {
+  enum Status {
+    OK = 0;
+    ERROR = 1;
+  }
+  Status status = 1;
+}
+
+service UserActor {
+  rpc ChangeUserName(ChangeUserNamePayload) returns (ChangeUserNameResponse) {}
+}

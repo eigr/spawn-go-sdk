@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package eigr.functions.protocol.actors;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/eigr/spawn-go-sdk/eigr/eigr/functions/protocol/actors;actors";
+
+extend google.protobuf.FieldOptions {
+    bool actor_id = 9999;
+}
