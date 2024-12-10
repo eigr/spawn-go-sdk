@@ -4,7 +4,6 @@ package examples.actors;
 
 option go_package = "github.com/eigr/spawn-go-sdk/examples/actors;actors";
 
-
 message UserState {
   string name = 1;
 }
@@ -14,6 +13,7 @@ message ChangeUserNamePayload {
 }
 
 message ChangeUserNameResponse {
+  // this is a bad example, but it's just an example
   enum Status {
     OK = 0;
     ERROR = 1;

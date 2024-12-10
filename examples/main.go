@@ -26,7 +26,7 @@ func main() {
 	// Creates an actor with the given configuration
 	actor := system.BuildActor(actorConfig)
 
-	// Define uma ação simples para o ator
+	// Define a simple action for the actor
 	actor.AddAction("ChangeUserName", func(ctx spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
 		// Convert payload to expected type
 		input, ok := payload.(*actors.ChangeUserNamePayload)
