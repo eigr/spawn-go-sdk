@@ -9,4 +9,4 @@ require (
 	google.golang.org/protobuf v1.35.2
 )
 
-replace github.com/eigr/spawn-go-sdk/spawn => ../spawn
+//replace github.com/eigr/spawn-go-sdk/spawn => ../spawn

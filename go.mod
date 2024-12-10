@@ -8,4 +8,4 @@ require (
     github.com/eigr/spawn-go-sdk/spawn v0.1.0
 )
 
-replace github.com/eigr/spawn-go-sdk/spawn => ./spawn
+//replace github.com/eigr/spawn-go-sdk/spawn => ./spawn
