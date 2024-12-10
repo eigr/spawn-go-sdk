@@ -3,9 +3,14 @@ package spawn
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	protocol "spawn/eigr/functions/protocol/actors"
+	"sync"
+	"syscall"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -17,6 +22,9 @@ type System struct {
 	proxyPort  int
 	exposePort int
 	url        string
+	stopCh     chan struct{}
+	server     *http.Server
+	wg         sync.WaitGroup
 }
 
 // NewSystem creates a new Spawn system.
@@ -25,6 +33,7 @@ func NewSystem(name string) *System {
 		actors: make(map[string]*Actor),
 		name:   name,
 		url:    "http://localhost", // Default URL
+		stopCh: make(chan struct{}),
 	}
 }
 
@@ -46,11 +55,18 @@ func (s *System) RegisterActor(actor *Actor) *System {
 	return s
 }
 
+// BuildActor creates an actor and returns it.
+func (s *System) BuildActor(config ActorConfig) *Actor {
+	return ActorOf(config)
+}
+
 // Start initializes the system by registering all configured actors with the sidecar.
 func (s *System) Start() error {
 	if len(s.actors) == 0 {
 		return fmt.Errorf("no actors registered in the system")
 	}
+
+	go s.startServer()
 
 	// Converts actors into a Protobuf representation map
 	actorProtos := s.convertActorsToProtobuf()
@@ -88,8 +104,42 @@ func (s *System) Start() error {
 		return fmt.Errorf("failed to register actors, status code: %d", resp.StatusCode)
 	}
 
+	go s.listenForTermination()
+
 	log.Println("Actors successfully registered and system started")
+	s.wg.Wait()
 	return nil
+}
+
+// Await waits for the system to stop.
+func (s *System) Await() {
+	s.wg.Add(1)
+	defer s.wg.Done()
+	// Wait until `stopCh` channel is closed
+	<-s.stopCh
+}
+
+func (s *System) listenForTermination() {
+	// Add a goroutine to the WaitGroup to wait for its completion
+	s.wg.Add(1)
+	defer s.wg.Done()
+
+	// Create a channel to capture signals
+	signalChan := make(chan os.Signal, 1)
+
+	// Report SIGINT and SIGTERM signals
+	signal.Notify(signalChan, syscall.SIGTERM)
+
+	// Block until a termination signal is received
+	sig := <-signalChan
+	log.Printf("Received %s, shutting down gracefully...", sig)
+
+	// Tenta fechar o servidor HTTP
+	if err := s.server.Close(); err != nil {
+		log.Printf("Error closing the server: %v", err)
+	}
+
+	close(s.stopCh)
 }
 
 // postToSidecar sends the serialized data to the Spawn sidecar API.
@@ -176,11 +226,6 @@ func (s *System) convertActorsToProtobuf() map[string]*protocol.Actor {
 	return actorMap
 }
 
-// BuildActor creates an actor and returns it.
-func (s *System) BuildActor(config ActorConfig) *Actor {
-	return ActorOf(config)
-}
-
 func mapKindFromGoToProto(kind Kind) protocol.Kind {
 	switch kind {
 	case Named:
@@ -196,4 +241,51 @@ func mapKindFromGoToProto(kind Kind) protocol.Kind {
 	default:
 		return protocol.Kind_UNKNOW_KIND
 	}
+}
+
+func (s *System) startServer() {
+	http.HandleFunc("/api/v1/actors/actions", s.handleActorInvocation)
+	addr := fmt.Sprintf(":%d", s.exposePort)
+	log.Printf("HTTP server started on port %d\n", s.exposePort)
+
+	// Inicializa o servidor HTTP
+	s.server = &http.Server{Addr: addr}
+
+	// Adiciona a goroutine ao WaitGroup para aguardar sua finalização
+	s.wg.Add(1)
+	defer s.wg.Done()
+
+	// Começa a servir requisições
+	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("HTTP server failed: %v", err)
+	}
+}
+
+func (s *System) handleActorInvocation(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	var actorInvocation protocol.ActorInvocation
+	if err := proto.Unmarshal(body, &actorInvocation); err != nil {
+		http.Error(w, fmt.Sprintf("failed to unmarshal protobuf: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Process the invocation
+	log.Printf("Received actor invocation: %v", actorInvocation)
+	s.processActorInvocation(&actorInvocation)
+
+	// Enviar resposta (de exemplo)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"success"}`))
+}
+
+func (s *System) processActorInvocation(actorInvocation *protocol.ActorInvocation) *protocol.ActorInvocationResponse {
+	// Implement the logic to process the actor invocation here
+	log.Printf("Processing actor invocation: %v", actorInvocation)
+	return &protocol.ActorInvocationResponse{}
 }
