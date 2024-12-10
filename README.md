@@ -46,7 +46,7 @@ syntax = "proto3";
 
 package examples.actors;
 
-option go_package = "github.com/eigr/spawn-go-sdk/examples/actors;actors";
+option go_package = "examples/actors";
 
 message UserState {
   string name = 1;
@@ -57,11 +57,12 @@ message ChangeUserNamePayload {
 }
 
 message ChangeUserNameResponse {
-  enum Status {
+  // this is a bad example, but it's just an example
+  enum ResponseStatus {
     OK = 0;
     ERROR = 1;
   }
-  Status status = 1;
+  ResponseStatus response_status = 1;
 }
 
 service UserActor {
@@ -84,7 +85,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/eigr/spawn-go-sdk/examples/actors"
+	"examples/actors"
+
 	"github.com/eigr/spawn-go-sdk/spawn"
 	"google.golang.org/protobuf/proto"
 )
@@ -94,10 +96,10 @@ func main() {
 	actorConfig := spawn.ActorConfig{
 		Name:               "UserActor",         // Name of ator
 		StateType:          &actors.UserState{}, // State type
-		Kind:               spawn.Unnamed,       // Actor Type (Unnamed)
+		Kind:               spawn.Named,         // Actor Type (Named)
 		Stateful:           true,                // Stateful actor
-		SnapshotTimeout:    60,                  // Optional. Snapshot timeout
-		DeactivatedTimeout: 120,                 // Optional. Deactivation timeout
+		SnapshotTimeout:    60,                  // Snapshot timeout
+		DeactivatedTimeout: 120,                 // Deactivation timeout
 	}
 
 	// Creates an actor directly
@@ -113,15 +115,15 @@ func main() {
 
 		// Updates the status and prepares the response
 		state := &actors.UserState{Name: input.NewName}
-		response := &actors.ChangeUserNameResponse{Status: actors.ChangeUserNameResponse_OK}
+		response := &actors.ChangeUserNameResponse{ResponseStatus: actors.ChangeUserNameResponse_OK}
 
 		// Returns status and response
 		return spawn.Of(state, response), nil
 	})
 
 	// Initializes the Spawn system
-	system := spawn.NewSystem("my-actor-system").
-		UseProxyPort(9090).
+	system := spawn.NewSystem("spawn-system").
+		UseProxyPort(9001).
 		ExposePort(8090).
 		RegisterActor(userActor)
 
@@ -130,6 +132,7 @@ func main() {
 		log.Fatalf("Failed to start Actor System: %v", err)
 	}
 }
+
 ```
 
 ## 📚 Explore More

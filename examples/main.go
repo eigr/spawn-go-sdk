@@ -15,7 +15,7 @@ func main() {
 	actorConfig := spawn.ActorConfig{
 		Name:               "UserActor",         // Name of ator
 		StateType:          &actors.UserState{}, // State type
-		Kind:               spawn.Unnamed,       // Actor Type (Named)
+		Kind:               spawn.Named,         // Actor Type (Named)
 		Stateful:           true,                // Stateful actor
 		SnapshotTimeout:    60,                  // Snapshot timeout
 		DeactivatedTimeout: 120,                 // Deactivation timeout
@@ -42,7 +42,7 @@ func main() {
 
 	// Initializes the Spawn system
 	system := spawn.NewSystem("spawn-system").
-		UseProxyPort(9090).
+		UseProxyPort(9001).
 		ExposePort(8090).
 		RegisterActor(userActor)
 
