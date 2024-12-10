@@ -131,6 +131,8 @@ func main() {
 	if err := system.Start(); err != nil {
 		log.Fatalf("Failed to start Actor System: %v", err)
 	}
+
+	system.Await()
 }
 ```
 
