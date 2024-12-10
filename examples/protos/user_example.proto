@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package examples.actors;
 
-option go_package = "github.com/eigr/spawn-go-sdk/examples/actors;actors";
+option go_package = "examples/actors";
 
 message UserState {
   string name = 1;
@@ -14,11 +14,11 @@ message ChangeUserNamePayload {
 
 message ChangeUserNameResponse {
   // this is a bad example, but it's just an example
-  enum Status {
+  enum ResponseStatus {
     OK = 0;
     ERROR = 1;
   }
-  Status status = 1;
+  ResponseStatus response_status = 1;
 }
 
 service UserActor {

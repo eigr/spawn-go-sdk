@@ -90,33 +90,44 @@ import (
 )
 
 func main() {
-	system := spawn.NewSystem()
-
+	// Defines the actor configuration
 	actorConfig := spawn.ActorConfig{
-		Name:               "UserActor",
-		StateType:          &actors.UserState{},
-		Kind:               spawn.Named,
-		Stateful:           true,
-		SnapshotTimeout:    60,
-		DeactivatedTimeout: 120,
+		Name:               "UserActor",         // Name of ator
+		StateType:          &actors.UserState{}, // State type
+		Kind:               spawn.Unnamed,       // Actor Type (Unnamed)
+		Stateful:           true,                // Stateful actor
+		SnapshotTimeout:    60,                  // Optional. Snapshot timeout
+		DeactivatedTimeout: 120,                 // Optional. Deactivation timeout
 	}
 
-	actor := system.BuildActor(actorConfig)
+	// Creates an actor directly
+	userActor := spawn.ActorOf(actorConfig)
 
-	actor.AddAction("ChangeUserName", func(ctx spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
+	// Define a simple action for the actor
+	userActor.AddAction("ChangeUserName", func(ctx spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
+		// Convert payload to expected type
 		input, ok := payload.(*actors.ChangeUserNamePayload)
 		if !ok {
 			return spawn.Value{}, fmt.Errorf("invalid payload type")
 		}
 
+		// Updates the status and prepares the response
 		state := &actors.UserState{Name: input.NewName}
 		response := &actors.ChangeUserNameResponse{Status: actors.ChangeUserNameResponse_OK}
 
+		// Returns status and response
 		return spawn.Of(state, response), nil
 	})
 
-	if err := system.Register(actor); err != nil {
-		log.Fatalf("Failed to register actor: %v", err)
+	// Initializes the Spawn system
+	system := spawn.NewSystem("my-actor-system").
+		UseProxyPort(9090).
+		ExposePort(8090).
+		RegisterActor(userActor)
+
+	// Start the system
+	if err := system.Start(); err != nil {
+		log.Fatalf("Failed to start Actor System: %v", err)
 	}
 }
 ```

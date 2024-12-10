@@ -6,7 +6,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
 option java_package = "io.eigr.functions.protocol.actors";
-option go_package = "github.com/eigr/spawn-go-sdk/eigr/eigr/functions/protocol/actors;actors";
+option go_package = "spawn/eigr/functions/protocol/actors";
 
 message Registry { map<string, Actor> actors = 1; }
 

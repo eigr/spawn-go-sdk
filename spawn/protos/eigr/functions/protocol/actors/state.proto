@@ -8,7 +8,7 @@ package eigr.functions.protocol.state;
 import "eigr/functions/protocol/actors/actor.proto";
 
 option java_package = "io.eigr.functions.protocol.state";
-option go_package = "github.com/eigr/spawn-go-sdk/eigr/eigr/functions/protocol/actors;actors";
+option go_package = "spawn/eigr/functions/protocol/actors";
 
 // A revision is just a version number for a record in the snapshot table that stores the actors' state.
 // When an actor has its snaphost timeout, it increments its internal revision number and saves it along with its internal data.

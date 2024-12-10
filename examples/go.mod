@@ -1,4 +1,4 @@
-module github.com/eigr/spawn-go-sdk/examples
+module examples
 
 go 1.23
 
@@ -9,4 +9,4 @@ require (
 	google.golang.org/protobuf v1.35.2
 )
 
-//replace github.com/eigr/spawn-go-sdk/spawn => ../spawn
+replace github.com/eigr/spawn-go-sdk/spawn => ../spawn

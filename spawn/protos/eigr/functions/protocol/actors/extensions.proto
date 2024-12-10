@@ -4,7 +4,7 @@ package eigr.functions.protocol.actors;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/eigr/spawn-go-sdk/eigr/eigr/functions/protocol/actors;actors";
+option go_package = "spawn/eigr/functions/protocol/actors";
 
 extend google.protobuf.FieldOptions {
     bool actor_id = 9999;

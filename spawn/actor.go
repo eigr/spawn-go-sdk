@@ -17,6 +17,8 @@ type Actor struct {
 	Stateful           bool
 	SnapshotTimeout    int64
 	DeactivatedTimeout int64
+	MinPoolSize        int32
+	MaxPoolSize        int32
 	actions            map[string]ActionHandler
 	mu                 sync.Mutex
 }
@@ -29,10 +31,24 @@ type ActorConfig struct {
 	Stateful           bool
 	SnapshotTimeout    int64
 	DeactivatedTimeout int64
+	MinPoolSize        int32
+	MaxPoolSize        int32
 }
 
-// NewActor creates a new actor instance.
-func NewActor(config ActorConfig) *Actor {
+// ActorOf creates a new actor instance (preferred method for API consistency).
+func ActorOf(config ActorConfig) *Actor {
+	return newActor(config) // Delegates to the existing constructor for simplicity.
+}
+
+// AddAction adds a new action to the actor.
+func (a *Actor) AddAction(name string, handler ActionHandler) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.actions[name] = handler
+}
+
+// NewActor creates a new actor instance (legacy method, can be deprecated if needed).
+func newActor(config ActorConfig) *Actor {
 	return &Actor{
 		Name:               config.Name,
 		StateType:          config.StateType,
@@ -42,11 +58,4 @@ func NewActor(config ActorConfig) *Actor {
 		DeactivatedTimeout: config.DeactivatedTimeout,
 		actions:            make(map[string]ActionHandler),
 	}
-}
-
-// AddAction adds a new action to the actor.
-func (a *Actor) AddAction(name string, handler ActionHandler) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.actions[name] = handler
 }

@@ -4,8 +4,11 @@ package spawn
 type Kind string
 
 const (
-	Unnamed Kind = "UNNAMED"
-	Named   Kind = "NAMED"
+	Unnamed    Kind = "UNNAMED"
+	Named      Kind = "NAMED"
+	Pooled     Kind = "Pooled"
+	Task       Kind = "Task"
+	Projection Kind = "Projection"
 )
 
 // Value represents the return on a stock.
