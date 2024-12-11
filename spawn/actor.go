@@ -7,7 +7,7 @@ import (
 )
 
 // ActionHandler defines the function of a Protobuf-supported action.
-type ActionHandler func(ctx ActorContext, payload proto.Message) (Value, error)
+type ActionHandler func(ctx *ActorContext, payload proto.Message) (Value, error)
 
 // Actor represents an actor in Spawn.
 type Actor struct {

@@ -12,7 +12,12 @@ import (
 	"sync"
 	"syscall"
 
+	"strings"
+
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // System represents the Spawn system.
@@ -246,18 +251,16 @@ func mapKindFromGoToProto(kind Kind) protocol.Kind {
 func (s *System) startServer() {
 	http.HandleFunc("/api/v1/actors/actions", s.handleActorInvocation)
 	addr := fmt.Sprintf(":%d", s.exposePort)
-	log.Printf("HTTP server started on port %d\n", s.exposePort)
+	log.Printf("ActorHost server started on port %d\n", s.exposePort)
 
-	// Inicializa o servidor HTTP
 	s.server = &http.Server{Addr: addr}
 
-	// Adiciona a goroutine ao WaitGroup para aguardar sua finalização
+	// Adds the goroutine to the WaitGroup to wait for its completion
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	// Começa a servir requisições
 	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("HTTP server failed: %v", err)
+		log.Fatalf("ActorHost server failed: %v", err)
 	}
 }
 
@@ -275,17 +278,115 @@ func (s *System) handleActorInvocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process the invocation
-	log.Printf("Received actor invocation: %v", actorInvocation)
-	s.processActorInvocation(&actorInvocation)
+	log.Printf("Received actor invocation: %v", &actorInvocation)
+	resp := s.processActorInvocation(&actorInvocation)
 
-	// Enviar resposta (de exemplo)
-	w.Header().Set("Content-Type", "application/json")
+	payloadBytes, err := proto.Marshal(resp)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to marshal protobuf response: %v", err), http.StatusInternalServerError)
+		return
+
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
+	w.Write(payloadBytes)
 }
 
 func (s *System) processActorInvocation(actorInvocation *protocol.ActorInvocation) *protocol.ActorInvocationResponse {
-	// Implement the logic to process the actor invocation here
 	log.Printf("Processing actor invocation: %v", actorInvocation)
-	return &protocol.ActorInvocationResponse{}
+
+	actorName := actorInvocation.Actor.Name
+	actionName := actorInvocation.ActionName
+	requestContext := actorInvocation.CurrentContext
+	actualStateAny := requestContext.State
+
+	var req proto.Message
+	switch payload := actorInvocation.Payload.(type) {
+	case *protocol.ActorInvocation_Value:
+		// Deserialize the payload
+		request, err := unmarshalAny(payload.Value)
+		if err != nil {
+			log.Printf("Failed to unmarshal payload: %v", err)
+			return &protocol.ActorInvocationResponse{}
+		}
+		req = request
+	case *protocol.ActorInvocation_Noop:
+		log.Printf("No operation payload received for actor: %s", actorName)
+	}
+
+	actor, ok := s.actors[actorName]
+	if !ok {
+		log.Printf("Actor not found: %s", actorName)
+		return &protocol.ActorInvocationResponse{}
+	}
+
+	actionHandler, ok := actor.actions[actionName]
+	if !ok {
+		log.Printf("Action not found: %s for actor %s", actionName, actorName)
+		return &protocol.ActorInvocationResponse{}
+	}
+
+	// Unmarshal the actor's current state
+	actualStateValue, err := unmarshalAny(actualStateAny)
+	if err != nil {
+		log.Printf("Failed to unmarshal state for actor %s: %v", actorName, err)
+		return &protocol.ActorInvocationResponse{}
+	}
+
+	// Invoke the action handler
+	value, err := actionHandler(&ActorContext{CurrentState: actualStateValue}, req)
+	if err != nil {
+		log.Printf("Error invoking action: %s for actor %s, error: %v", actionName, actorName, err)
+		return &protocol.ActorInvocationResponse{}
+	}
+
+	log.Printf("Action [%s] response: %s for actor %s", actionName, value, actorName)
+
+	// Marshal the returned value into an Any type
+	//payloadAny, err := anypb.New(value)
+	// if err != nil {
+	// 	log.Printf("Failed to marshal response payload: %v", err)
+	// 	return &protocol.ActorInvocationResponse{}
+	// }
+
+	// Create the updated context
+	updatedContext := &protocol.Context{
+		State: actualStateAny, // Use the original state or update as needed
+	}
+
+	return &protocol.ActorInvocationResponse{
+		ActorName:      actorName,
+		ActorSystem:    s.name,
+		UpdatedContext: updatedContext,
+		//Payload:        payloadAny,
+		Workflow:   nil,  // Populate if needed
+		Checkpoint: true, // Example: enable checkpointing
+	}
+}
+
+func unmarshalAny(iany *anypb.Any) (proto.Message, error) {
+	if iany == nil {
+		return nil, fmt.Errorf("input Any message is nil")
+	}
+
+	// Extract the message type name from the TypeUrl
+	msgName := strings.TrimPrefix(iany.GetTypeUrl(), "type.googleapis.com/")
+
+	// Lookup the message type in the global registry
+	mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(msgName))
+	if err != nil {
+		return nil, fmt.Errorf("message type %s not found: %v", msgName, err)
+	}
+
+	// Create a new instance of the message type
+	message := mt.New().Interface()
+
+	// Unmarshal the Any value into the message instance
+	err = proto.Unmarshal(iany.GetValue(), message)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshalling failed: %v", err)
+	}
+
+	return message, nil
 }

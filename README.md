@@ -106,7 +106,7 @@ func main() {
 	userActor := spawn.ActorOf(actorConfig)
 
 	// Define a simple action for the actor
-	userActor.AddAction("ChangeUserName", func(ctx spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
+	userActor.AddAction("ChangeUserName", func(ctx *spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
 		// Convert payload to expected type
 		input, ok := payload.(*actors.ChangeUserNamePayload)
 		if !ok {
@@ -114,11 +114,13 @@ func main() {
 		}
 
 		// Updates the status and prepares the response
-		state := &actors.UserState{Name: input.NewName}
+		newState := &actors.UserState{Name: input.NewName}
 		response := &actors.ChangeUserNameResponse{ResponseStatus: actors.ChangeUserNameResponse_OK}
 
-		// Returns status and response
-		return spawn.Of(state, response), nil
+		// Returns response to caller and persist new state
+		return spawn.Of(response).
+			State(newState).
+			Materialize(), nil
 	})
 
 	// Initializes the Spawn system
@@ -165,9 +167,16 @@ Expected output similar to this:
 ./bin/examples/app
 ```
 
+Outputs need to be similar with this:
+
+```bash
+2024/12/10 20:09:37 HTTP server started on port 8090
+2024/12/10 20:09:37 Actors successfully registered and system started
+```
+
 ### 8️⃣ Validate Spawn CLI docker logs
 
-Use Id for previous `spawn dev run` command to see docker logs.
+Use `Id` for previous `spawn dev run` command to see docker logs.
 
 ```bash
 docker logs -f 7961ed391e06b36c6d73290a6d6a0cbb60cf910fd4e4ff3fc5b7bd49ed677976
