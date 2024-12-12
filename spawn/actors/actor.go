@@ -1,4 +1,4 @@
-package spawn
+package actors
 
 import (
 	"sync"
@@ -19,7 +19,7 @@ type Actor struct {
 	DeactivatedTimeout int64
 	MinPoolSize        int32
 	MaxPoolSize        int32
-	actions            map[string]ActionHandler
+	Actions            map[string]ActionHandler
 	mu                 sync.Mutex
 }
 
@@ -44,7 +44,7 @@ func ActorOf(config ActorConfig) *Actor {
 func (a *Actor) AddAction(name string, handler ActionHandler) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.actions[name] = handler
+	a.Actions[name] = handler
 }
 
 // NewActor creates a new actor instance (legacy method, can be deprecated if needed).
@@ -56,6 +56,6 @@ func newActor(config ActorConfig) *Actor {
 		Stateful:           config.Stateful,
 		SnapshotTimeout:    config.SnapshotTimeout,
 		DeactivatedTimeout: config.DeactivatedTimeout,
-		actions:            make(map[string]ActionHandler),
+		Actions:            make(map[string]ActionHandler),
 	}
 }

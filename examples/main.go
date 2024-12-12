@@ -5,9 +5,10 @@ import (
 	"log"
 	"time"
 
-	"examples/actors"
+	domain "examples/actors"
 
-	"github.com/eigr/spawn-go-sdk/spawn"
+	spawn "github.com/eigr/spawn-go-sdk/spawn/actors"
+	actorSystem "github.com/eigr/spawn-go-sdk/spawn/system"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -15,7 +16,7 @@ func main() {
 	// Defines the actor configuration
 	actorConfig := spawn.ActorConfig{
 		Name:               "UserActor",         // Name of ator
-		StateType:          &actors.UserState{}, // State type
+		StateType:          &domain.UserState{}, // State type
 		Kind:               spawn.Named,         // Actor Type (Named)
 		Stateful:           true,                // Stateful actor
 		SnapshotTimeout:    60,                  // Snapshot timeout
@@ -29,14 +30,14 @@ func main() {
 	userActor.AddAction("ChangeUserName", func(ctx *spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
 		// Convert payload to expected type
 		log.Printf("Received invoke on Action ChangeUserName. Payload: %v", payload)
-		input, ok := payload.(*actors.ChangeUserNamePayload)
+		input, ok := payload.(*domain.ChangeUserNamePayload)
 		if !ok {
 			return spawn.Value{}, fmt.Errorf("invalid payload type")
 		}
 
 		// Updates the status and prepares the response
-		newState := &actors.UserState{Name: input.NewName}
-		response := &actors.ChangeUserNameResponse{ResponseStatus: actors.ChangeUserNameResponse_OK}
+		newState := &domain.UserState{Name: input.NewName}
+		response := &domain.ChangeUserNameResponse{ResponseStatus: domain.ChangeUserNameResponse_OK}
 
 		// Returns response to caller and persist new state
 		return spawn.Of(response).
@@ -45,7 +46,7 @@ func main() {
 	})
 
 	// Initializes the Spawn system
-	system := spawn.NewSystem("spawn-system").
+	system := actorSystem.NewSystem("spawn-system").
 		UseProxyPort(9001).
 		ExposePort(8090).
 		RegisterActor(userActor)
@@ -61,8 +62,8 @@ func main() {
 		"spawn-system",
 		"UserActor",
 		"ChangeUserName",
-		&actors.ChangeUserNamePayload{NewName: "John Doe"},
-		spawn.Options{})
+		&domain.ChangeUserNamePayload{NewName: "John Doe"},
+		actorSystem.Options{})
 
 	log.Printf("Response: %v", resp)
 

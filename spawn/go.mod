@@ -1,4 +1,4 @@
-module spawn
+module "github.com/eigr/spawn-go-sdk"
 
 go 1.23
 

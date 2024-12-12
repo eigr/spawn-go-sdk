@@ -1,4 +1,4 @@
-package spawn
+package system
 
 import (
 	"bytes"
@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	protocol "spawn/eigr/functions/protocol/actors"
 	"sync"
 	"syscall"
+
+	"github.com/eigr/spawn-go-sdk/spawn/actors"
+	protocol "github.com/eigr/spawn-go-sdk/spawn/eigr/functions/protocol/actors"
 
 	"strings"
 
@@ -22,7 +24,7 @@ import (
 
 // System represents the Spawn system.
 type System struct {
-	actors     map[string]*Actor
+	actors     map[string]*actors.Actor
 	name       string
 	proxyPort  int
 	exposePort int
@@ -40,7 +42,7 @@ type Options = invocationOptions
 // NewSystem creates a new Spawn system.
 func NewSystem(name string) *System {
 	return &System{
-		actors: make(map[string]*Actor),
+		actors: make(map[string]*actors.Actor),
 		name:   name,
 		url:    "http://localhost", // Default URL
 		stopCh: make(chan struct{}),
@@ -60,14 +62,14 @@ func (s *System) ExposePort(port int) *System {
 }
 
 // RegisterActor registers a single actor in the system.
-func (s *System) RegisterActor(actor *Actor) *System {
+func (s *System) RegisterActor(actor *actors.Actor) *System {
 	s.actors[actor.Name] = actor
 	return s
 }
 
 // BuildActor creates an actor and returns it.
-func (s *System) BuildActor(config ActorConfig) *Actor {
-	return ActorOf(config)
+func (s *System) BuildActor(config actors.ActorConfig) *actors.Actor {
+	return actors.ActorOf(config)
 }
 
 // Start initializes the system by registering all configured actors with the sidecar.
@@ -268,8 +270,8 @@ func (s *System) convertActorsToProtobuf() map[string]*protocol.Actor {
 
 	for _, actor := range s.actors {
 		// Converting actions
-		actions := make([]*protocol.Action, 0, len(actor.actions))
-		for actionName := range actor.actions {
+		actions := make([]*protocol.Action, 0, len(actor.Actions))
+		for actionName := range actor.Actions {
 			actions = append(actions, &protocol.Action{
 				Name: actionName,
 			})
@@ -308,7 +310,7 @@ func (s *System) convertActorsToProtobuf() map[string]*protocol.Actor {
 		}
 
 		// Configuring pool size if the actor kind is pooled
-		if actor.Kind == Pooled {
+		if actor.Kind == actors.Pooled {
 			settings.MinPoolSize = actor.MinPoolSize
 			settings.MaxPoolSize = actor.MaxPoolSize
 		}
@@ -330,17 +332,17 @@ func (s *System) convertActorsToProtobuf() map[string]*protocol.Actor {
 	return actorMap
 }
 
-func mapKindFromGoToProto(kind Kind) protocol.Kind {
+func mapKindFromGoToProto(kind actors.Kind) protocol.Kind {
 	switch kind {
-	case Named:
+	case actors.Named:
 		return protocol.Kind_NAMED
-	case Unnamed:
+	case actors.Unnamed:
 		return protocol.Kind_UNNAMED
-	case Pooled:
+	case actors.Pooled:
 		return protocol.Kind_POOLED
-	case Task:
+	case actors.Task:
 		return protocol.Kind_TASK
-	case Projection:
+	case actors.Projection:
 		return protocol.Kind_PROJECTION
 	default:
 		return protocol.Kind_UNKNOW_KIND
@@ -420,7 +422,7 @@ func (s *System) processActorInvocation(actorInvocation *protocol.ActorInvocatio
 		return &protocol.ActorInvocationResponse{}
 	}
 
-	actionHandler, ok := actor.actions[actionName]
+	actionHandler, ok := actor.Actions[actionName]
 	if !ok {
 		log.Printf("Action not found: %s for actor %s", actionName, actorName)
 		return &protocol.ActorInvocationResponse{}
@@ -434,7 +436,7 @@ func (s *System) processActorInvocation(actorInvocation *protocol.ActorInvocatio
 	}
 
 	// Invoke the action handler
-	value, err := actionHandler(&ActorContext{CurrentState: actualStateValue}, req)
+	value, err := actionHandler(&actors.ActorContext{CurrentState: actualStateValue}, req)
 	if err != nil {
 		log.Printf("Error invoking action: %s for actor %s, error: %v", actionName, actorName, err)
 		return &protocol.ActorInvocationResponse{}

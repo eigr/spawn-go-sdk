@@ -1,4 +1,4 @@
-package spawn
+package actors
 
 import (
 	"google.golang.org/protobuf/proto"
