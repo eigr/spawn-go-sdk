@@ -32,6 +32,11 @@ type System struct {
 	wg         sync.WaitGroup
 }
 
+type invocationOptions map[string]interface{}
+
+// Creating an alias for InvocationOptions, now called Options
+type Options = invocationOptions
+
 // NewSystem creates a new Spawn system.
 func NewSystem(name string) *System {
 	return &System{
@@ -112,7 +117,7 @@ func (s *System) Start() error {
 	go s.listenForTermination()
 
 	log.Println("Actors successfully registered and system started")
-	s.wg.Wait()
+	///s.wg.Wait()
 	return nil
 }
 
@@ -123,6 +128,100 @@ func (s *System) Await() {
 	// Wait until `stopCh` channel is closed
 	<-s.stopCh
 }
+
+// client API
+func (s *System) Invoke(system string, actorName string, action string, request proto.Message, options Options) (proto.Message, error) {
+	log.Printf("Invoking actor: %s, action: %s", actorName, action)
+	parent, hasParent := options["parent"]
+	async, hasAsync := options["async"]
+	metadata, hasMetadata := options["metadata"]
+
+	req := &protocol.InvocationRequest{}
+	req.System = &protocol.ActorSystem{Name: system}
+
+	actor := &protocol.Actor{
+		Id: &protocol.ActorId{
+			Name:   actorName,
+			System: system,
+		},
+	}
+
+	if hasParent {
+		if parentStr, ok := parent.(string); ok {
+			actor.Id.Parent = parentStr
+			req.RegisterRef = actorName
+		} else {
+			return nil, fmt.Errorf("parent must be a string")
+		}
+	}
+	if hasAsync {
+		if asyncBool, ok := async.(bool); ok {
+			req.Async = asyncBool
+		} else {
+			return nil, fmt.Errorf("async must be a bool")
+		}
+	}
+	if hasMetadata {
+		req.Metadata = metadata.(map[string]string)
+	}
+
+	req.Actor = actor
+	req.ActionName = action
+
+	if request != nil {
+		payload := &anypb.Any{}
+
+		requestBytes, err := proto.Marshal(request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode Actor InvocationRequest: %w", err)
+		}
+
+		payload.Value = requestBytes
+		req.Payload = &protocol.InvocationRequest_Value{Value: payload}
+	}
+
+	r, err := proto.Marshal(req)
+	if err != nil {
+		log.Fatalln("Failed to encode Actor InvocationRequest:", err)
+	}
+
+	// call proxy to invoke actor
+	responseBytes, err := s.invokeActor(actorName, r)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &protocol.InvocationResponse{}
+	if err := proto.Unmarshal(responseBytes, resp); err != nil {
+		log.Fatalln("Failed to parse Actor InvocationResponse:", err)
+	}
+
+	log.Printf("Actor invocation response: %v", resp)
+
+	if resp.Status.GetStatus() != protocol.Status_OK {
+		return nil, fmt.Errorf("actor invocation failed: %s", resp.Status)
+	}
+
+	var message proto.Message
+
+	switch p := resp.GetPayload().(type) {
+	case *protocol.InvocationResponse_Value:
+		iany := p.Value
+		msg, err := unmarshalAny(iany)
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshalling response value: %v", err)
+		}
+		message = msg
+	case *protocol.InvocationResponse_Noop:
+		message = nil
+	default:
+		return nil, fmt.Errorf("unknown payload type")
+	}
+
+	return message, nil
+}
+
+// private functions
 
 func (s *System) listenForTermination() {
 	// Add a goroutine to the WaitGroup to wait for its completion
@@ -389,4 +488,41 @@ func unmarshalAny(iany *anypb.Any) (proto.Message, error) {
 	}
 
 	return message, nil
+}
+
+func (s *System) invokeActor(actorName string, requestBytes []byte) ([]byte, error) {
+	// Monta a URL de invocação do ator remoto
+	url := fmt.Sprintf("%s:%d/api/v1/system/%s/actors/%s/invoke", s.url, s.proxyPort, s.name, actorName)
+
+	// Configura os cabeçalhos HTTP
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBytes))
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
+	}
+
+	req.Header.Set("User-Agent", "user-function-client/0.1.0")
+	req.Header.Set("Accept", "application/octet-stream")
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	// Envia a requisição HTTP POST
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao enviar requisição: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Verifica a resposta
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("falha na invocação do ator. Status: %d, Erro: %s", resp.StatusCode, string(body))
+	}
+
+	// Lê o conteúdo da resposta
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler resposta: %v", err)
+	}
+
+	return respBody, nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"examples/actors"
 
@@ -27,6 +28,7 @@ func main() {
 	// Define a simple action for the actor
 	userActor.AddAction("ChangeUserName", func(ctx *spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
 		// Convert payload to expected type
+		log.Printf("Received invoke on Action ChangeUserName. Payload: %v", payload)
 		input, ok := payload.(*actors.ChangeUserNamePayload)
 		if !ok {
 			return spawn.Value{}, fmt.Errorf("invalid payload type")
@@ -52,6 +54,17 @@ func main() {
 	if err := system.Start(); err != nil {
 		log.Fatalf("Failed to start Actor System: %v", err)
 	}
+
+	time.Sleep(5 * time.Second)
+
+	resp, _ := system.Invoke(
+		"spawn-system",
+		"UserActor",
+		"ChangeUserName",
+		&actors.ChangeUserNamePayload{NewName: "John Doe"},
+		spawn.Options{})
+
+	log.Printf("Response: %v", resp)
 
 	system.Await()
 }
