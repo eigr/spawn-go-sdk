@@ -137,8 +137,6 @@ func main() {
 		log.Fatalf("Failed to start Actor System: %v", err)
 	}
 
-	time.Sleep(5 * time.Second)
-
 	resp, _ := system.Invoke(
 		"spawn-system",
 		"UserActor",
