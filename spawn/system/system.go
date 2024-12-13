@@ -171,14 +171,11 @@ func (s *System) Invoke(system string, actorName string, action string, request 
 	req.ActionName = action
 
 	if request != nil {
-		payload := &anypb.Any{}
-
-		requestBytes, err := proto.Marshal(request)
+		payload, err := anypb.New(request)
 		if err != nil {
-			return nil, fmt.Errorf("failed to encode Actor InvocationRequest: %w", err)
+			return nil, fmt.Errorf("failed to encode payload to make an Actor InvocationRequest: %w", err)
 		}
 
-		payload.Value = requestBytes
 		req.Payload = &protocol.InvocationRequest_Value{Value: payload}
 	}
 
@@ -209,7 +206,9 @@ func (s *System) Invoke(system string, actorName string, action string, request 
 	switch p := resp.GetPayload().(type) {
 	case *protocol.InvocationResponse_Value:
 		iany := p.Value
+		log.Printf("Received response payload: %v", iany)
 		msg, err := unmarshalAny(iany)
+		log.Printf("Unmarshalled response payload: %v", msg)
 		if err != nil {
 			return nil, fmt.Errorf("error unmarshalling response value: %v", err)
 		}
@@ -386,7 +385,6 @@ func (s *System) handleActorInvocation(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to marshal protobuf response: %v", err), http.StatusInternalServerError)
 		return
-
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -409,7 +407,7 @@ func (s *System) processActorInvocation(actorInvocation *protocol.ActorInvocatio
 		request, err := unmarshalAny(payload.Value)
 		if err != nil {
 			log.Printf("Failed to unmarshal payload: %v", err)
-			return &protocol.ActorInvocationResponse{}
+			return &protocol.ActorInvocationResponse{ActorName: actorName, ActorSystem: s.name}
 		}
 		req = request
 	case *protocol.ActorInvocation_Noop:
@@ -419,27 +417,35 @@ func (s *System) processActorInvocation(actorInvocation *protocol.ActorInvocatio
 	actor, ok := s.actors[actorName]
 	if !ok {
 		log.Printf("Actor not found: %s", actorName)
-		return &protocol.ActorInvocationResponse{}
+		return &protocol.ActorInvocationResponse{ActorName: actorName, ActorSystem: s.name}
 	}
 
 	actionHandler, ok := actor.Actions[actionName]
 	if !ok {
 		log.Printf("Action not found: %s for actor %s", actionName, actorName)
-		return &protocol.ActorInvocationResponse{}
+		return &protocol.ActorInvocationResponse{ActorName: actorName, ActorSystem: s.name}
 	}
 
+	fmt.Printf("Marshalled Any: %v\n", actualStateAny)
 	// Unmarshal the actor's current state
-	actualStateValue, err := unmarshalAny(actualStateAny)
-	if err != nil {
-		log.Printf("Failed to unmarshal state for actor %s: %v", actorName, err)
-		return &protocol.ActorInvocationResponse{}
+	var stateValue proto.Message
+	if actualStateAny == nil {
+		log.Printf("State not found for actor %s", actorName)
+	} else {
+		actualStateValue, err := unmarshalAny(actualStateAny)
+		if err != nil {
+			log.Printf("Failed to unmarshal state for actor %s: %v", actorName, err)
+			return &protocol.ActorInvocationResponse{ActorName: actorName, ActorSystem: s.name}
+		}
+
+		stateValue = actualStateValue
 	}
 
 	// Invoke the action handler
-	value, err := actionHandler(&actors.ActorContext{CurrentState: actualStateValue}, req)
+	value, err := actionHandler(&actors.ActorContext{CurrentState: stateValue}, req)
 	if err != nil {
 		log.Printf("Error invoking action: %s for actor %s, error: %v", actionName, actorName, err)
-		return &protocol.ActorInvocationResponse{}
+		return &protocol.ActorInvocationResponse{ActorName: actorName, ActorSystem: s.name}
 	}
 
 	log.Printf("Action [%s] response: %s for actor %s", actionName, value, actorName)
@@ -452,17 +458,35 @@ func (s *System) processActorInvocation(actorInvocation *protocol.ActorInvocatio
 	// }
 
 	// Create the updated context
+	var updatedState *anypb.Any = actualStateAny
+	if value.State != nil {
+		us, err := anypb.New(value.State)
+		if err != nil {
+			log.Printf("Failed to marshal updated state: %v", err)
+			return &protocol.ActorInvocationResponse{ActorName: actorName, ActorSystem: s.name}
+		}
+
+		updatedState = us
+	}
+
 	updatedContext := &protocol.Context{
-		State: actualStateAny, // Use the original state or update as needed
+		State: updatedState,
+	}
+
+	log.Printf("Value Response: %v", value.Response)
+	responPayload, err := anypb.New(value.Response)
+	if err != nil {
+		log.Printf("Failed to marshal response payload: %v", err)
+		return &protocol.ActorInvocationResponse{ActorName: actorName, ActorSystem: s.name}
 	}
 
 	return &protocol.ActorInvocationResponse{
 		ActorName:      actorName,
 		ActorSystem:    s.name,
 		UpdatedContext: updatedContext,
-		//Payload:        payloadAny,
-		Workflow:   nil,  // Populate if needed
-		Checkpoint: true, // Example: enable checkpointing
+		Payload:        &protocol.ActorInvocationResponse_Value{Value: responPayload},
+		Workflow:       nil,   // Populate if needed
+		Checkpoint:     false, // Example: enable checkpointing
 	}
 }
 
