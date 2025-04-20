@@ -8,7 +8,7 @@ In this example we are creating an actor in a Named way, that is, it is a known 
 
 ```go
 actorConfig := spawn.ActorConfig{
-    Name:               "UserActor",         // Nome do ator
+    Name:               "UserActor",         // Actor name
     StateType:          &actors.UserState{}, // State type
     Kind:               spawn.Named,         // Actor Type (Named)
     Stateful:           true,                // Stateful actor
@@ -21,7 +21,7 @@ actorConfig := spawn.ActorConfig{
 // Creates an actor with the given configuration
 actor := system.BuildActor(actorConfig)
 
-// Define uma ação simples para o ator
+// Define a simple action for the actor
 actor.AddAction("ChangeUserName", func(ctx spawn.ActorContext, payload proto.Message) (spawn.Value, error) {
     // Convert payload to expected type
     input, ok := payload.(*actors.ChangeUserNamePayload)
